@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -36,14 +35,11 @@ class Streamystats:
             f"{self.base_url}/api/recommendations?{params}",
             headers={"Authorization": f'MediaBrowser Token="{self.api_key}"'},
         )
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                body = json.loads(resp.read())
-        except urllib.error.HTTPError as e:
-            # A user Streamystats does not know (yet) simply has no picks.
-            if e.code in (400, 404):
-                return []
-            raise
+        # Any failure raises: an error must never read as "no recommendations",
+        # or the user's collection would be deleted. (A user Streamystats does
+        # not know yet gets a 200 with an empty list.)
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            body = json.loads(resp.read())
         ids: list[str] = []
         for rec in body.get("data") or []:
             item_id = (rec.get("item") or {}).get("id")

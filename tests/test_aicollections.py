@@ -93,10 +93,13 @@ class FakeJellyfin:
 
 
 class FakeRecs:
-    def __init__(self, by_user):
+    def __init__(self, by_user, failing=()):
         self.by_user = by_user
+        self.failing = set(failing)
 
     def recommended_ids(self, user_id, limit):
+        if user_id in self.failing:
+            raise OSError("connection refused")
         return self.by_user.get(user_id, [])[:limit]
 
 
@@ -180,15 +183,6 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(col["Tags"], [".hide-from-sarah", ".hide-from-tom"])
         self.assertIn(".hide-from-tom", jf._users["t"]["Policy"]["BlockedTags"])
 
-    def test_no_recommendations_removes_the_collection(self):
-        jf = FakeJellyfin([jf_user("n", "nullable.eth")])
-        recs = FakeRecs({"n": ["a"]})
-        run(jf, recs, self.cfg)
-        recs.by_user["n"] = []
-        result = run(jf, recs, self.cfg)
-        self.assertEqual(result.removed, 1)
-        self.assertEqual(owned(jf, "n"), [])
-
     def test_cover_redrawn_only_when_top_four_change(self):
         jf = FakeJellyfin([jf_user("n", "nullable.eth")])
         recs = FakeRecs({"n": ["a", "b", "c", "d", "e"]})
@@ -211,6 +205,32 @@ class SyncTests(unittest.TestCase):
         result = run(jf, recs, self.cfg)
         self.assertEqual(jf.calls, [])
         self.assertEqual(result.policies_changed, 0)
+
+    def test_failed_fetch_keeps_the_collection(self):
+        jf = FakeJellyfin([jf_user("n", "nullable.eth"), jf_user("s", "Sarah")])
+        run(jf, FakeRecs({"n": ["a"], "s": ["b"]}), self.cfg)
+        result = run(jf, FakeRecs({"s": ["b"]}, failing={"n"}), self.cfg)
+        self.assertEqual(len(owned(jf, "n")), 1)
+        self.assertEqual(owned(jf, "n")[0]["Members"], ["a"])
+        self.assertEqual(len(result.errors), 1)
+
+    def test_empty_for_everyone_is_an_outage_not_a_purge(self):
+        # The 2026-10-08 incident: Streamystats answered 200 with no picks for
+        # every user (an internal error), and every collection was deleted.
+        jf = FakeJellyfin([jf_user("n", "nullable.eth"), jf_user("s", "Sarah")])
+        run(jf, FakeRecs({"n": ["a"], "s": ["b"]}), self.cfg)
+        result = run(jf, FakeRecs({}), self.cfg)
+        self.assertEqual(len(owned(jf, "n")), 1)
+        self.assertEqual(len(owned(jf, "s")), 1)
+        self.assertEqual(result.removed, 0)
+        self.assertEqual(len(result.errors), 1)
+
+    def test_one_user_losing_picks_still_removes_theirs(self):
+        jf = FakeJellyfin([jf_user("n", "nullable.eth"), jf_user("s", "Sarah")])
+        run(jf, FakeRecs({"n": ["a"], "s": ["b"]}), self.cfg)
+        result = run(jf, FakeRecs({"s": ["b"]}), self.cfg)
+        self.assertEqual(owned(jf, "n"), [])
+        self.assertEqual(result.removed, 1)
 
     def test_remove_all_undoes_everything_but_hand_set_tags(self):
         jf = FakeJellyfin([jf_user("s", "Sarah", [".no-share"]), jf_user("n", "nullable.eth")])

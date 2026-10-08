@@ -15,6 +15,9 @@ untouched.
 
 - New collections are created empty and hidden before anything is added, and
   deleted again if hiding fails.
+- Failed requests never delete anything, and if Streamystats returns no
+  recommendations for *any* user (it answers 200 with an empty list when it
+  fails internally) the run changes nothing and exits non-zero.
 - A newly created Jellyfin user can see other users' collections until the next
   run tags them out, so run it often (e.g. every 15 minutes).
 - Owners can see the hide tags on their own collection (the other user names).

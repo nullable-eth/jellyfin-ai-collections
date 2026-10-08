@@ -131,9 +131,29 @@ def run(jf, recs, cfg: Config) -> Result:
             jf.delete_item(col["Id"])
             result.removed += 1
 
+    # Fetch everyone's picks first. A failed fetch keeps that user's
+    # collection as it is.
+    picks: dict[str, list[str]] = {}
     for user in users:
         try:
-            ids = recs.recommended_ids(user.id, cfg.size)
+            picks[user.id] = recs.recommended_ids(user.id, cfg.size)
+        except Exception as e:
+            log.error("recommendations for %s failed: %s", user.name, e)
+            result.errors.append(f"{user.name}: {e}")
+    # Circuit breaker: Streamystats answers 200 with an empty list when it
+    # fails internally. Nothing for anyone while collections exist means it is
+    # broken, not that every user stopped having recommendations.
+    if owned and picks and not any(picks.values()):
+        msg = "Streamystats returned no recommendations for any user; leaving collections unchanged"
+        log.error(msg)
+        result.errors.append(msg)
+        return result
+
+    for user in users:
+        if user.id not in picks:
+            continue
+        try:
+            ids = picks[user.id]
             existing = owned.get(user.id)
             if not ids:
                 if existing:
