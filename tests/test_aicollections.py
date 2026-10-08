@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from aicollections import plan  # noqa: E402
 from aicollections.plan import COVER_PROVIDER_KEY, OWNER_PROVIDER_KEY, User  # noqa: E402
+from aicollections.retry import with_retries  # noqa: E402
 from aicollections.sync import Config, remove_all, run  # noqa: E402
 
 PREFIX = ".hide-from-"
@@ -136,6 +137,45 @@ class PlanTests(unittest.TestCase):
                                            "AI Recommendations"), users[0])
         self.assertEqual(plan.legacy_owner("/c/AI Recommendations n1 [boxset]", users, "AI Recommendations"), users[0])
         self.assertIsNone(plan.legacy_owner("/c/Gio [boxset]", users, "AI Recommendations"))
+
+
+class RetryTests(unittest.TestCase):
+    def test_rides_out_connection_refused(self):
+        import urllib.error
+        attempts, slept = [], []
+
+        def flaky():
+            attempts.append(1)
+            if len(attempts) < 3:
+                raise urllib.error.URLError(ConnectionRefusedError(111, "Connection refused"))
+            return "ok"
+
+        self.assertEqual(with_retries(flaky, "test", sleep=slept.append), "ok")
+        self.assertEqual(slept, [5.0, 15.0])
+
+    def test_does_not_retry_client_errors(self):
+        import urllib.error
+        attempts = []
+
+        def unauthorized():
+            attempts.append(1)
+            raise urllib.error.HTTPError("u", 401, "Unauthorized", {}, None)
+
+        with self.assertRaises(urllib.error.HTTPError):
+            with_retries(unauthorized, "test", sleep=lambda s: None)
+        self.assertEqual(len(attempts), 1)
+
+    def test_gives_up_after_the_last_delay(self):
+        import urllib.error
+        attempts = []
+
+        def down():
+            attempts.append(1)
+            raise urllib.error.URLError("refused")
+
+        with self.assertRaises(urllib.error.URLError):
+            with_retries(down, "test", sleep=lambda s: None)
+        self.assertEqual(len(attempts), 4)
 
 
 class SyncTests(unittest.TestCase):

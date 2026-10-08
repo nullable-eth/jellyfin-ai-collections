@@ -13,6 +13,8 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from .retry import with_retries
+
 
 class JellyfinError(Exception):
     def __init__(self, status: int, message: str):
@@ -41,9 +43,13 @@ class Jellyfin:
         if body is not None:
             headers["Content-Type"] = content_type
         req = urllib.request.Request(url, data=body, method=method, headers=headers)
-        try:
+
+        def send() -> bytes:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                data = resp.read()
+                return resp.read()
+
+        try:
+            data = with_retries(send, f"Jellyfin {method} {path}")
         except urllib.error.HTTPError as e:
             raise JellyfinError(e.code, e.read().decode(errors="replace")[:300]) from e
         if not data:

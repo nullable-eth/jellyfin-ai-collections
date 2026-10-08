@@ -6,6 +6,8 @@ import json
 import urllib.parse
 import urllib.request
 
+from .retry import with_retries
+
 
 class Streamystats:
     def __init__(self, base_url: str, api_key: str, jellyfin_server_id: str, timeout: float = 180):
@@ -38,8 +40,11 @@ class Streamystats:
         # Any failure raises: an error must never read as "no recommendations",
         # or the user's collection would be deleted. (A user Streamystats does
         # not know yet gets a 200 with an empty list.)
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-            body = json.loads(resp.read())
+        def fetch() -> dict:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                return json.loads(resp.read())
+
+        body = with_retries(fetch, f"Streamystats recommendations for {user_id}")
         ids: list[str] = []
         for rec in body.get("data") or []:
             item_id = (rec.get("item") or {}).get("id")
