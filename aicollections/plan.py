@@ -64,6 +64,12 @@ def membership_diff(current: list[str], wanted: list[str]) -> tuple[list[str], l
     return [i for i in wanted if i not in have], [i for i in current if i not in want]
 
 
+def collection_name(user: User, base: str) -> str:
+    """`<username> - <base>`: the display name of `user`'s collection.
+    Jellyfin usernames are unique, so the name is unique per user."""
+    return f"{user.name} - {base}"
+
+
 def folder_name(display_name: str, user: User) -> str:
     """Name a collection is created with. Jellyfin stores each collection in a
     folder named after it, so this stays unique; the display name is then set

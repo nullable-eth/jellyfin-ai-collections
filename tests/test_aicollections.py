@@ -122,6 +122,10 @@ class PlanTests(unittest.TestCase):
         users = [User("s", "Sarah"), User("n", "nullable.eth"), User("k", "Kids")]
         self.assertEqual(plan.collection_tags(users[1], users, PREFIX), [".hide-from-kids", ".hide-from-sarah"])
 
+    def test_collection_name_is_username_plus_base(self):
+        self.assertEqual(plan.collection_name(User("n", "nullable.eth"), "AI Recommendations"),
+                         "nullable.eth - AI Recommendations")
+
     def test_name_collision_never_hides_from_owner(self):
         users = [User("s", "Sarah"), User("t", "sarah!")]
         self.assertEqual(plan.collection_tags(users[0], users, PREFIX), [])
@@ -187,7 +191,7 @@ class SyncTests(unittest.TestCase):
         result = run(jf, FakeRecs({"n": ["a", "b", "c", "d", "e"]}), self.cfg)
         self.assertEqual(result.collections, 1)
         [col] = owned(jf, "n")
-        self.assertEqual(col["Name"], "AI Recommendations")
+        self.assertEqual(col["Name"], "nullable.eth - AI Recommendations")
         self.assertEqual(col["Tags"], [".hide-from-sarah"])
         self.assertEqual(col["Members"], ["a", "b", "c", "d", "e"])
         order = [c for c in jf.calls if c[1] == col["Id"]]
@@ -211,6 +215,7 @@ class SyncTests(unittest.TestCase):
         run(jf, FakeRecs({"n": ["a", "b"]}), self.cfg)
         self.assertEqual(list(jf.cols), ["old"])
         self.assertEqual(jf.cols["old"]["ProviderIds"][OWNER_PROVIDER_KEY], "n")
+        self.assertEqual(jf.cols["old"]["Name"], "nullable.eth - AI Recommendations")
         self.assertEqual(jf.cols["old"]["Members"], ["a", "b"])
 
     def test_new_user_is_tagged_out_of_existing_collections(self):
@@ -222,6 +227,16 @@ class SyncTests(unittest.TestCase):
         [col] = owned(jf, "n")
         self.assertEqual(col["Tags"], [".hide-from-sarah", ".hide-from-tom"])
         self.assertIn(".hide-from-tom", jf._users["t"]["Policy"]["BlockedTags"])
+
+    def test_renamed_user_follows_into_the_collection_name(self):
+        jf = FakeJellyfin([jf_user("n", "nullable.eth")])
+        run(jf, FakeRecs({"n": ["a"]}), self.cfg)
+        [col] = owned(jf, "n")
+        self.assertEqual(col["Name"], "nullable.eth - AI Recommendations")
+        jf._users["n"]["Name"] = "gio"
+        jf.calls.clear()
+        run(jf, FakeRecs({"n": ["a"]}), self.cfg)
+        self.assertEqual(col["Name"], "gio - AI Recommendations")
 
     def test_cover_redrawn_only_when_top_four_change(self):
         jf = FakeJellyfin([jf_user("n", "nullable.eth")])

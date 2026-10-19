@@ -4,7 +4,8 @@ Environment:
   JELLYFIN_URL            e.g. http://jellyfin:8096
   JELLYFIN_API_KEY        admin API key (also used for Streamystats)
   STREAMYSTATS_URL        e.g. http://streamystats-web:3001
-  COLLECTION_NAME         default "AI Recommendations"
+  COLLECTION_NAME         base display name (default "AI Recommendations");
+                          each user's collection is named "<username> - <base>"
   COLLECTION_SIZE         default 30
   HIDE_TAG_PREFIX         default ".hide-from-"
 """

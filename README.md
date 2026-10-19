@@ -1,7 +1,8 @@
 # jellyfin-ai-collections
 
-Gives every Jellyfin user a private **"AI Recommendations"** collection, filled
-from [Streamystats](https://github.com/fredrikburmester/streamystats)
+Gives every Jellyfin user a private collection named
+**"<username> - AI Recommendations"** (one per user), filled from
+[Streamystats](https://github.com/fredrikburmester/streamystats)
 recommendations and refreshed on a schedule, with a 2×2 poster collage cover.
 
 ## Privacy
@@ -40,7 +41,7 @@ python -m aicollections --remove   # delete the collections and our blocked tags
 | `JELLYFIN_URL` | — | e.g. `http://jellyfin:8096` |
 | `JELLYFIN_API_KEY` | — | Jellyfin admin API key (also used for Streamystats) |
 | `STREAMYSTATS_URL` | — | e.g. `http://streamystats:3000` |
-| `COLLECTION_NAME` | `AI Recommendations` | |
+| `COLLECTION_NAME` | `AI Recommendations` | Base name; each collection displays as `<username> - <base>` |
 | `COLLECTION_SIZE` | `30` | |
 | `HIDE_TAG_PREFIX` | `.hide-from-` | |
 
