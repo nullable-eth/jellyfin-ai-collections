@@ -71,13 +71,14 @@ def _apply_metadata(jf, collection_id: str, owner: User, tags: list[str], cfg: C
     dto = jf.item(collection_id, owner.id)
     if dto is None:
         raise RuntimeError(f"collection {collection_id} disappeared")
+    name = plan.collection_name(owner, cfg.display_name)
     providers = dict(dto.get("ProviderIds") or {})
     providers[OWNER_PROVIDER_KEY] = owner.id
     if cover is not None:
         providers[COVER_PROVIDER_KEY] = cover
     locked = set(dto.get("LockedFields") or []) | {"Name", "Tags"}
     changed = (
-        dto.get("Name") != cfg.display_name
+        dto.get("Name") != name
         or not plan.same_tags(dto.get("Tags") or [], tags)
         or (dto.get("ProviderIds") or {}) != providers
         or set(dto.get("LockedFields") or []) != locked
@@ -85,7 +86,7 @@ def _apply_metadata(jf, collection_id: str, owner: User, tags: list[str], cfg: C
     if changed:
         jf.update_item(
             collection_id,
-            {**dto, "Name": cfg.display_name, "Tags": tags,
+            {**dto, "Name": name, "Tags": tags,
              "ProviderIds": providers, "LockedFields": sorted(locked)},
         )
     return {**dto, "ProviderIds": providers}
