@@ -58,6 +58,20 @@ def same_tags(a: list[str], b: list[str]) -> bool:
     return sorted(a) == sorted(b)
 
 
+def normalize_id(item_id: str) -> str:
+    """An item id as Jellyfin compares them: it writes the same id with and
+    without dashes."""
+    return item_id.replace("-", "").lower()
+
+
+def split_found(wanted: list[str], found: list[str]) -> tuple[list[str], list[str]]:
+    """(found, missing): `wanted` split by whether it is among `found`, each
+    in `wanted`'s order and spelling."""
+    have = {normalize_id(i) for i in found}
+    return ([i for i in wanted if normalize_id(i) in have],
+            [i for i in wanted if normalize_id(i) not in have])
+
+
 def membership_diff(current: list[str], wanted: list[str]) -> tuple[list[str], list[str]]:
     """(to add, to remove) so the collection holds exactly `wanted`."""
     have, want = set(current), set(wanted)

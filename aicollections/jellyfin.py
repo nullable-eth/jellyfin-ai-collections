@@ -104,6 +104,14 @@ class Jellyfin:
         )
         return [i["Id"] for i in (resp or {}).get("Items", [])]
 
+    def visible_ids(self, ids: list[str], user_id: str) -> list[str]:
+        """Those of `ids` in the library that `user_id` may see, as Jellyfin
+        writes them. An id Jellyfin doesn't know is left out, not an error."""
+        if not ids:
+            return []
+        resp = self._request("GET", "/Items", {"Ids": ",".join(ids), "userId": user_id, "Limit": len(ids)})
+        return [i["Id"] for i in (resp or {}).get("Items", [])]
+
     def add_members(self, collection_id: str, ids: list[str]) -> None:
         if ids:
             self._request("POST", f"/Collections/{collection_id}/Items", {"Ids": ",".join(ids)})

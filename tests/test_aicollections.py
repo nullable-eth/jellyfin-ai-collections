@@ -35,6 +35,7 @@ class FakeJellyfin:
         self.fail_metadata = False
         self.posters = 0
         self._next = 0
+        self.gone = set()  # ids no longer in the library
 
     # users
     def users(self):
@@ -73,8 +74,14 @@ class FakeJellyfin:
     def members(self, cid, user_id):
         return list(self.cols[cid]["Members"])
 
+    def visible_ids(self, ids, user_id):
+        return [i for i in ids if i not in self.gone]
+
     def add_members(self, cid, ids):
         if ids:
+            unknown = [i for i in ids if i in self.gone]
+            if unknown:  # as Jellyfin does: the whole add fails
+                raise RuntimeError(f"Jellyfin 400: No item exists with the supplied Id {unknown[0]}")
             self.calls.append(("add", cid))
             self.cols[cid]["Members"] += ids
 
@@ -141,6 +148,11 @@ class PlanTests(unittest.TestCase):
                                            "AI Recommendations"), users[0])
         self.assertEqual(plan.legacy_owner("/c/AI Recommendations n1 [boxset]", users, "AI Recommendations"), users[0])
         self.assertIsNone(plan.legacy_owner("/c/Gio [boxset]", users, "AI Recommendations"))
+
+    def test_split_found_ignores_dashes_and_case(self):
+        wanted = ["f32f921207acace3d034ece8293f2084", "0a7d1ee184acff4730a5e0db0a48f964"]
+        found = ["F32F9212-07AC-ACE3-D034-ECE8293F2084"]
+        self.assertEqual(plan.split_found(wanted, found), ([wanted[0]], [wanted[1]]))
 
 
 class RetryTests(unittest.TestCase):
@@ -278,6 +290,25 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(len(owned(jf, "n")), 1)
         self.assertEqual(len(owned(jf, "s")), 1)
         self.assertEqual(result.removed, 0)
+        self.assertEqual(len(result.errors), 1)
+
+    def test_item_gone_from_the_library_is_left_out(self):
+        # The 2026-10-19 and 2026-10-21 failures: a replaced file gets a new
+        # Jellyfin id, Streamystats recommends the old one until its next
+        # sync, and Jellyfin rejected the user's whole add with a 400.
+        jf = FakeJellyfin([jf_user("n", "nullable.eth")])
+        run(jf, FakeRecs({"n": ["a"]}), self.cfg)
+        jf.gone = {"b"}
+        result = run(jf, FakeRecs({"n": ["a", "b", "c"]}), self.cfg)
+        self.assertEqual(result.errors, [])
+        self.assertEqual(owned(jf, "n")[0]["Members"], ["a", "c"])
+
+    def test_nothing_left_keeps_the_collection(self):
+        jf = FakeJellyfin([jf_user("n", "nullable.eth")])
+        run(jf, FakeRecs({"n": ["a"]}), self.cfg)
+        jf.gone = {"x", "y"}
+        result = run(jf, FakeRecs({"n": ["x", "y"]}), self.cfg)
+        self.assertEqual(owned(jf, "n")[0]["Members"], ["a"])
         self.assertEqual(len(result.errors), 1)
 
     def test_one_user_losing_picks_still_removes_theirs(self):
