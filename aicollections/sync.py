@@ -161,6 +161,18 @@ def run(jf, recs, cfg: Config) -> Result:
                     jf.delete_item(existing["Id"])
                     result.removed += 1
                 continue
+            # Streamystats lags the library: an item deleted, or replaced by a
+            # new file under a new id, is still recommended until its next
+            # sync, and Jellyfin rejects a whole add when any one id is unknown
+            # (400, "No item exists with the supplied Id"). Those are left
+            # out, as are items the user may not see. None left means the
+            # lookup itself is suspect, so the collection stays as it is.
+            ids, missing = plan.split_found(ids, jf.visible_ids(ids, user.id))
+            if missing:
+                log.info("%s: left out %d recommendation(s) not in the library for them: %s",
+                         user.name, len(missing), ", ".join(missing))
+            if not ids:
+                raise RuntimeError("none of the recommended items is in the library for them; collection left unchanged")
             tags = plan.collection_tags(user, users, cfg.tag_prefix)
             collection_id, dto = _ensure_collection(jf, user, existing, tags, cfg)
             add, drop = plan.membership_diff(jf.members(collection_id, user.id), ids)
