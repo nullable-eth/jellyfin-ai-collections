@@ -53,6 +53,15 @@ def main(argv: list[str]) -> int:
     )
     for err in result.errors:
         log.error("%s", err)
+    # Exit non-zero only when the run as a whole failed: nothing synced at all
+    # (Streamystats or Jellyfin down, the circuit breaker tripped). One user's
+    # transient upstream error (a 401 or a timeout from Streamystats, seen
+    # 22 Oct 26) leaves that user's collection as it was and is retried in 15
+    # minutes; failing the Job for it raised KubeJobFailed every few runs and
+    # sent the cluster agent investigating each one.
+    if result.errors and "--remove" not in argv and result.collections > 0:
+        log.warning("%d user(s) not synced this run; retrying next run", len(result.errors))
+        return 0
     return 1 if result.errors else 0
 
 
